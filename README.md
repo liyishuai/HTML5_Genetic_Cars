@@ -3,12 +3,18 @@ HTML5 Genetic Cars
 
 A genetic algorithm car evolver in HTML5 canvas.
 
-This is inspired by BoxCar2D, and uses the same physics engine, Box2D, but it's written from scratch.
+Inspired by BoxCar2D, uses the same physics engine (Box2D), written from scratch.
 
-This is the code as published on http://rednuht.org/genetic_cars_2/
+Originally published on http://rednuht.org/genetic_cars_2/
 
-The current module-based format required npm and browserify.
+## Running
 
-Build with:
+Just open `index.html` in a browser. No build step, no npm, no bundler.
 
-npm run-script build
+For the graph-only (headless) view, open `graphs.html`.
+
+> **Tip:** Some browsers block local file access. If needed, serve locally:
+> ```
+> python3 -m http.server 8000
+> ```
+> Then visit `http://localhost:8000`
