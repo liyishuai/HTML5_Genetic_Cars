@@ -1833,6 +1833,7 @@
 
   var doDraw = true;
   var cw_paused = false;
+  var cw_animationFrameId = null;
 
   var box2dfps = 60;
   var screenfps = 60;
@@ -1986,14 +1987,29 @@
   }
 
   function cw_setCameraTarget(k) {
-    camera.target = k;
+    if (k === -1) {
+      camera.target = -1;
+      return;
+    }
+    // k can be a numeric index from the HTML onclick or a car info object
+    if (typeof k === 'number' && currentRunner) {
+      var carInfo = currentRunner.cars[k];
+      if (carInfo && carMap.has(carInfo)) {
+        camera.target = carInfo;
+      } else {
+        camera.target = -1;
+      }
+    } else {
+      camera.target = k;
+    }
   }
 
   function cw_setCameraPosition() {
     var cameraTargetPosition
-    if (camera.target !== -1) {
+    if (camera.target !== -1 && carMap.has(camera.target)) {
       cameraTargetPosition = carMap.get(camera.target).getPosition();
     } else {
+      camera.target = -1;
       cameraTargetPosition = leaderPosition;
     }
     var diff_y = camera.pos.y - cameraTargetPosition.y;
@@ -2144,7 +2160,7 @@
     simulationStep();
     cw_drawScreen();
 
-    if (!cw_paused) window.requestAnimationFrame(gameLoop);
+    if (!cw_paused) cw_animationFrameId = window.requestAnimationFrame(gameLoop);
   }
 
   function updateCarUI(carInfo) {
@@ -2223,11 +2239,15 @@
 
   function cw_startSimulation() {
     cw_paused = false;
-    window.requestAnimationFrame(gameLoop);
+    cw_animationFrameId = window.requestAnimationFrame(gameLoop);
   }
 
   function cw_stopSimulation() {
     cw_paused = true;
+    if (cw_animationFrameId) {
+      window.cancelAnimationFrame(cw_animationFrameId);
+      cw_animationFrameId = null;
+    }
   }
 
   function cw_clearPopulationWorld() {
@@ -2293,10 +2313,17 @@
   })
 
   document.querySelector("#new-population").addEventListener("click", function () {
-    cw_resetPopulationUI()
+    cw_stopSimulation();
+    cw_clearPopulationWorld();
+    cw_resetPopulationUI();
+    Math.seedrandom();
     cw_generationZero();
     ghost = ghost_create_ghost();
+    currentRunner = worldRun(world_def, generationState.generation, uiListeners);
+    setupCarUI();
+    cw_drawMiniMap();
     resetCarUI();
+    cw_startSimulation();
   })
 
   function saveProgress() {
@@ -2313,6 +2340,7 @@
       return;
     }
     cw_stopSimulation();
+    cw_clearPopulationWorld();
     generationState.generation = JSON.parse(localStorage.cw_savedGeneration);
     generationState.counter = localStorage.cw_genCounter;
     ghost = JSON.parse(localStorage.cw_ghost);
@@ -2321,6 +2349,7 @@
     document.getElementById("newseed").value = world_def.floorseed;
 
     currentRunner = worldRun(world_def, generationState.generation, uiListeners);
+    setupCarUI();
     cw_drawMiniMap();
     Math.seedrandom();
 
@@ -2344,14 +2373,13 @@
 
 
   function cw_pauseSimulation() {
-    cw_paused = true;
+    cw_stopSimulation();
     ghost_pause(ghost);
   }
 
   function cw_resumeSimulation() {
-    cw_paused = false;
     ghost_resume(ghost);
-    window.requestAnimationFrame(gameLoop);
+    cw_startSimulation();
   }
 
   function cw_startGhostReplay() {
@@ -2416,7 +2444,7 @@
     currentRunner = worldRun(world_def, generationState.generation, uiListeners);
     setupCarUI();
     cw_drawMiniMap();
-    window.requestAnimationFrame(gameLoop);
+    cw_startSimulation();
 
   }
 
@@ -2518,6 +2546,9 @@
   function cw_setEliteSize(clones) {
     generationConfig.constants.championLength = parseInt(clones, 10);
   }
+
+  // Expose to global scope for inline onclick handlers in index.html
+  window.cw_setCameraTarget = cw_setCameraTarget;
 
   cw_init();
 
