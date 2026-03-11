@@ -1617,7 +1617,7 @@
   }
 
   cw_Car.prototype.kill = function (currentRunner, constants) {
-    this.minimapmarker.style.borderLeft = "1px solid #3F72AF";
+    this.minimapmarker.style.borderLeft = "1px solid #ccc";
     var finishLine = currentRunner.scene.finishLine
     var max_car_health = constants.max_car_health;
     var status = run.getStatus(this.car.state, {
