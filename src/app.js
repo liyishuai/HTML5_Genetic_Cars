@@ -399,7 +399,6 @@
       throw new Error("already Finished");
     }
 
-    // console.log(state);
     // check health
     var position = worldConstruct.chassis.GetPosition();
     // check if car reached end of the path
@@ -601,7 +600,6 @@
         })
       }
       var iCo = getInbreedingCoefficient(child);
-      console.log("inbreeding coefficient", iCo)
       if (iCo > 0.25) {
         return false;
       }
@@ -636,9 +634,8 @@
     if (!currentChoices.has(chooseId)) {
       currentChoices.set(chooseId, initializePick())
     }
-    // console.log(chooseId);
+
     var state = currentChoices.get(chooseId);
-    // console.log(state.curparent);
     state.i++
     if (["wheel_radius", "wheel_vertex", "wheel_density"].indexOf(key) > -1) {
       state.curparent = cw_chooseParent(state);
@@ -652,7 +649,6 @@
       var attributeIndex = state.i;
       var swapPoint1 = state.swapPoint1
       var swapPoint2 = state.swapPoint2
-      // console.log(swapPoint1, swapPoint2, attributeIndex)
       if ((swapPoint1 == attributeIndex) || (swapPoint2 == attributeIndex)) {
         return curparent == 1 ? 0 : 1
       }
@@ -856,7 +852,6 @@
         nextState.score = oldScore;
       }
 
-      console.log(previousState, nextState);
 
       nextState.generation = [createStructure(config, temp, nextState.curDef)];
 
@@ -1170,7 +1165,6 @@
       k = 0;
     }
 
-    // console.log(k);
 
     outer_loop:
     for (k; k < cw_floorTiles.length; k++) {
@@ -1376,7 +1370,6 @@
       var nextState = cw_storeGraphScores(
         lastState, scores, generationSize
       );
-      console.log(scores, nextState);
       cw_clearGraphics(graphcanvas, graphctx, graphwidth, graphheight);
       cw_plotAverage(nextState, graphctx);
       cw_plotElite(nextState, graphctx);
@@ -1398,7 +1391,6 @@
 
 
   function cw_storeGraphScores(lastState, cw_carScores, generationSize) {
-    console.log(cw_carScores);
     return {
       cw_topScores: (lastState.cw_topScores || [])
         .concat([cw_carScores[0].score]),
@@ -1498,7 +1490,6 @@
 
     for (var k = 0; k < Math.min(10, cw_topScores.length); k++) {
       var topScore = cw_topScores[k];
-      // console.log(topScore);
       var n = "#" + (k + 1) + ":";
       var score = Math.round(topScore.v * 100) / 100;
       var distance = "d:" + Math.round(topScore.x * 100) / 100;
@@ -1617,7 +1608,7 @@
   }
 
   cw_Car.prototype.kill = function (currentRunner, constants) {
-    this.minimapmarker.style.borderLeft = "1px solid #3F72AF";
+    this.minimapmarker.style.borderLeft = "1px solid #ccc";
     var finishLine = currentRunner.scene.finishLine
     var max_car_health = constants.max_car_health;
     var status = run.getStatus(this.car.state, {
@@ -1757,7 +1748,6 @@
 
     var scene = setupScene(world_def);
     scene.world.Step(1 / world_def.box2dfps, 20, 20);
-    console.log("about to build cars");
     var cars = defs.map((def, i) => {
       return {
         index: i,
@@ -1859,6 +1849,7 @@
   var minimapctx = minimapcanvas.getContext("2d");
   var minimapscale = 3;
   var minimapfogdistance = 0;
+  var lastFloorSeed = null;
   var fogdistance = document.getElementById("minimapfog").style;
 
 
@@ -2084,8 +2075,12 @@
     var floorTiles = currentRunner.scene.floorTiles;
     var last_tile = null;
     var tile_position = new b2Vec2(-5, 0);
-    minimapfogdistance = 0;
-    fogdistance.width = "800px";
+    var floorChanged = (lastFloorSeed !== world_def.floorseed);
+    lastFloorSeed = world_def.floorseed;
+    if (floorChanged) {
+      minimapfogdistance = 0;
+      fogdistance.width = "800px";
+    }
     minimapcanvas.width = minimapcanvas.width;
     minimapctx.strokeStyle = "#3F72AF";
     minimapctx.beginPath();
@@ -2131,7 +2126,6 @@
       var generationSize = generationConfig.constants.generationSize;
       document.getElementById("population").innerHTML = (generationSize - cw_deadCars).toString();
 
-      // console.log(leaderPosition.leader, k)
       if (leaderPosition.leader == k) {
         // leader is dead, find new leader
         cw_findLeader();
@@ -2174,7 +2168,6 @@
     if (position.x > leaderPosition.x) {
       leaderPosition = position;
       leaderPosition.leader = k;
-      // console.log("new leader: ", k);
     }
   }
 
