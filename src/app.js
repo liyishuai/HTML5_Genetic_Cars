@@ -1859,6 +1859,7 @@
   var minimapctx = minimapcanvas.getContext("2d");
   var minimapscale = 3;
   var minimapfogdistance = 0;
+  var lastFloorSeed = null;
   var fogdistance = document.getElementById("minimapfog").style;
 
 
@@ -2084,8 +2085,12 @@
     var floorTiles = currentRunner.scene.floorTiles;
     var last_tile = null;
     var tile_position = new b2Vec2(-5, 0);
-    minimapfogdistance = 0;
-    fogdistance.width = "800px";
+    var floorChanged = (lastFloorSeed !== world_def.floorseed);
+    lastFloorSeed = world_def.floorseed;
+    if (floorChanged) {
+      minimapfogdistance = 0;
+      fogdistance.width = "800px";
+    }
     minimapcanvas.width = minimapcanvas.width;
     minimapctx.strokeStyle = "#3F72AF";
     minimapctx.beginPath();
