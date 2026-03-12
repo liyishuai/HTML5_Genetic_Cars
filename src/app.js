@@ -98,6 +98,29 @@
           prop, generator, originalValue, factor
         );
       });
+    },
+    mutateReplace(prop, generator, originalValues, mutation_range, chanceToMutate) {
+      var factor = (prop.factor || 1) * mutation_range;
+      return originalValues.map(function (originalValue) {
+        if (generator() > chanceToMutate) {
+          return originalValue;
+        }
+
+        // Calculate bounds based on the factor, centered around the original value
+        var minBound = Math.max(0, originalValue - (factor / 2));
+        var maxBound = Math.min(1, originalValue + (factor / 2));
+
+        // Pick a completely random flat value within those bounds
+        // Fallback to 0-1 if factor is >= 1 (100% mutation size)
+        if (factor >= 1) {
+          minBound = 0;
+          maxBound = 1;
+        }
+
+        var rangeValue = createNormal({ inclusive: true }, generator);
+        // Map [0, 1] to [minBound, maxBound]
+        return minBound + (rangeValue * (maxBound - minBound));
+      });
     }
   };
 
@@ -163,11 +186,12 @@
         })
       });
     },
-    createMutatedClone(schema, generator, parent, factor, chanceToMutate) {
+    createMutatedClone(schema, generator, parent, factor, chanceToMutate, mutationAlgorithm) {
+      var mutateFn = mutationAlgorithm === 'normals' ? random.mutateNormals : random.mutateReplace;
       return Object.keys(schema).reduce(function (clone, key) {
         var schemaProp = schema[key];
         var originalValues = parent[key];
-        var values = random.mutateNormals(
+        var values = mutateFn(
           schemaProp, generator, originalValues, factor, chanceToMutate
         );
         clone[key] = values;
@@ -581,6 +605,21 @@
     return Math.floor(-Math.log(r) * totalParents) % totalParents;
   }
 
+  function flatRankSelect(parents) {
+    var totalParents = parents.length;
+    var parentIndex = -1;
+    for (var k = 0; k < totalParents; k++) {
+      if (Math.random() <= 0.2) {
+        parentIndex = k;
+        break;
+      }
+    }
+    if (parentIndex === -1) {
+      parentIndex = Math.floor(Math.random() * totalParents);
+    }
+    return parentIndex;
+  }
+
   function selectFromAllParents(parents, parentList, previousParentIndex) {
     var previousParent = parents[previousParentIndex];
     var validParents = parents.filter(function (parent, i) {
@@ -694,11 +733,12 @@
     var constants = {
       generationSize: 20, schema: schema, championLength: 1,
       mutation_range: 1, gen_mutation: 0.05,
+      mutationAlgorithm: 'replace'
     };
     var fn = function () {
       var currentChoices = new Map();
       return Object.assign({}, constants, {
-        selectFromAllParents: simpleSelect,
+        selectFromAllParents: flatRankSelect,
         generateRandom: generateRandom,
         pickParent: pickParent.bind(void 0, currentChoices),
       });
@@ -786,13 +826,15 @@
       var schema = config.schema,
         mutation_range = config.mutation_range,
         gen_mutation = config.gen_mutation,
-        generateRandom = config.generateRandom;
+        generateRandom = config.generateRandom,
+        mutationAlgorithm = config.mutationAlgorithm;
       return create.createMutatedClone(
         schema,
         generateRandom,
         parent,
         Math.max(mutation_range),
-        gen_mutation
+        gen_mutation,
+        mutationAlgorithm
       )
     }
 
@@ -862,13 +904,15 @@
     function createStructure(config, mutation_range, parent) {
       var schema = config.schema,
         gen_mutation = 1,
-        generateRandom = config.generateRandom;
+        generateRandom = config.generateRandom,
+        mutationAlgorithm = config.mutationAlgorithm;
       return create.createMutatedClone(
         schema,
         generateRandom,
         parent,
         mutation_range,
-        gen_mutation
+        gen_mutation,
+        mutationAlgorithm
       )
 
     }
@@ -2215,6 +2259,12 @@
     camera.pos.x = camera.pos.y = 0;
     cw_setCameraTarget(-1);
 
+    // Reset the Math.random seed to true randomness before generating the next generation.
+    // If we don't do this, the mutations will use the exact same deterministic pseudorandom
+    // sequence that the physics engine used for the floor, resulting in exact identical clones
+    // every generation if the parents happen to have the same scores.
+    Math.seedrandom();
+
     generationState = manageRound.nextGeneration(
       generationState, results, generationConfig()
     );
@@ -2515,6 +2565,11 @@
     cw_setEliteSize(elem.options[elem.selectedIndex].value)
   })
 
+  document.querySelector("#mutationalgorithm").addEventListener("change", function (e) {
+    var elem = e.target
+    cw_setMutationAlgorithm(elem.options[elem.selectedIndex].value)
+  })
+
   function cw_setMutation(mutation) {
     generationConfig.constants.gen_mutation = parseFloat(mutation);
   }
@@ -2538,6 +2593,10 @@
 
   function cw_setEliteSize(clones) {
     generationConfig.constants.championLength = parseInt(clones, 10);
+  }
+
+  function cw_setMutationAlgorithm(algo) {
+    generationConfig.constants.mutationAlgorithm = algo;
   }
 
   // Expose to global scope for inline onclick handlers in index.html
