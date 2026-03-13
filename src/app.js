@@ -434,6 +434,7 @@
     };
 
     if (position.x > constants.finishLine) {
+      nextState.health = state.health;
       return nextState;
     }
 
@@ -1419,9 +1420,6 @@
       cw_plotElite(nextState, graphctx);
       cw_plotTop(nextState, graphctx);
       cw_listTopScores(topScoresElem, nextState);
-      nextState.scatterGraph = drawAllResults(
-        scatterPlotElem, config, nextState, lastState.scatterGraph
-      );
       return nextState;
     },
     clearGraphics: function (graphElem) {
@@ -1447,7 +1445,6 @@
       cw_graphTop: (lastState.cw_graphTop || []).concat([
         cw_carScores[0].score.v
       ]),
-      allResults: (lastState.allResults || []).concat(cw_carScores),
     }
   }
 
@@ -1713,11 +1710,12 @@
     var tile_position = last_tile.GetWorldPoint(
       last_fixture.GetShape().m_vertices[3]
     );
-    world.finishLine = tile_position.x;
+    var finishLine = tile_position.x + 5;
+    world.finishLine = finishLine;
     return {
       world: world,
       floorTiles: floorTiles,
-      finishLine: tile_position.x
+      finishLine: finishLine
     };
   }
 
@@ -1791,6 +1789,7 @@
     }
 
     var scene = setupScene(world_def);
+    world_def.finishLine = scene.finishLine;
     scene.world.Step(1 / world_def.box2dfps, 20, 20);
     var cars = defs.map((def, i) => {
       return {
