@@ -38,23 +38,6 @@
       }
       return values;
     },
-    mutateShuffle(
-      prop, generator, originalValues, mutation_range, chanceToMutate
-    ) {
-      return random.mapToShuffle(prop, random.mutateNormals(
-        prop, generator, originalValues, mutation_range, chanceToMutate
-      ));
-    },
-    mutateIntegers(prop, generator, originalValues, mutation_range, chanceToMutate) {
-      return random.mapToInteger(prop, random.mutateNormals(
-        prop, generator, originalValues, mutation_range, chanceToMutate
-      ));
-    },
-    mutateFloats(prop, generator, originalValues, mutation_range, chanceToMutate) {
-      return random.mapToFloat(prop, random.mutateNormals(
-        prop, generator, originalValues, mutation_range, chanceToMutate
-      ));
-    },
     mapToShuffle(prop, normals) {
       var offset = prop.offset || 0;
       var limit = prop.limit || prop.length;
@@ -88,17 +71,6 @@
         return min + normal * range
       })
     },
-    mutateNormals(prop, generator, originalValues, mutation_range, chanceToMutate) {
-      var factor = (prop.factor || 1) * mutation_range
-      return originalValues.map(function (originalValue) {
-        if (generator() > chanceToMutate) {
-          return originalValue;
-        }
-        return mutateNormal(
-          prop, generator, originalValue, factor
-        );
-      });
-    },
     mutateReplace(prop, generator, originalValues, mutation_range, chanceToMutate) {
       var factor = (prop.factor || 1) * mutation_range;
       return originalValues.map(function (originalValue) {
@@ -126,21 +98,7 @@
 
 
 
-  function mutateNormal(prop, generator, originalValue, mutation_range) {
-    if (mutation_range > 1) {
-      throw new Error("Cannot mutate beyond bounds");
-    }
-    var newMin = originalValue - 0.5;
-    if (newMin < 0) newMin = 0;
-    if (newMin + mutation_range > 1)
-      newMin = 1 - mutation_range;
-    var rangeValue = createNormal({
-      inclusive: true,
-    }, generator);
-    return newMin + rangeValue * mutation_range;
-  }
-
-  function createNormal(prop, generator) {
+function createNormal(prop, generator) {
     if (!prop.inclusive) {
       return generator();
     } else {
@@ -186,8 +144,8 @@
         })
       });
     },
-    createMutatedClone(schema, generator, parent, factor, chanceToMutate, mutationAlgorithm) {
-      var mutateFn = mutationAlgorithm === 'normals' ? random.mutateNormals : random.mutateReplace;
+    createMutatedClone(schema, generator, parent, factor, chanceToMutate) {
+      var mutateFn = random.mutateReplace;
       return Object.keys(schema).reduce(function (clone, key) {
         var schemaProp = schema[key];
         var originalValues = parent[key];
@@ -733,8 +691,7 @@
     var schema = carConstruct.generateSchema(carConstants);
     var constants = {
       generationSize: 20, schema: schema, championLength: 1,
-      mutation_range: 1, gen_mutation: 0.05,
-      mutationAlgorithm: 'replace'
+      mutation_range: 1, gen_mutation: 0.05
     };
     var fn = function () {
       var currentChoices = new Map();
@@ -827,15 +784,13 @@
       var schema = config.schema,
         mutation_range = config.mutation_range,
         gen_mutation = config.gen_mutation,
-        generateRandom = config.generateRandom,
-        mutationAlgorithm = config.mutationAlgorithm;
+        generateRandom = config.generateRandom;
       return create.createMutatedClone(
         schema,
         generateRandom,
         parent,
         Math.max(mutation_range),
-        gen_mutation,
-        mutationAlgorithm
+        gen_mutation
       )
     }
 
@@ -905,17 +860,14 @@
     function createStructure(config, mutation_range, parent) {
       var schema = config.schema,
         gen_mutation = 1,
-        generateRandom = config.generateRandom,
-        mutationAlgorithm = config.mutationAlgorithm;
+        generateRandom = config.generateRandom;
       return create.createMutatedClone(
         schema,
         generateRandom,
         parent,
         mutation_range,
-        gen_mutation,
-        mutationAlgorithm
+        gen_mutation
       )
-
     }
 
     return { generationZero: generationZero, nextGeneration: nextGeneration };
@@ -2216,17 +2168,17 @@
 
   function cw_findLeader() {
     var lead = 0;
-    var cw_carArray = Array.from(carMap.values());
-    for (var k = 0; k < cw_carArray.length; k++) {
-      if (!cw_carArray[k].alive) {
-        continue;
+    carMap.forEach(function(cwCar, carInfo) {
+      if (!cwCar.alive) {
+        return;
       }
-      var position = cw_carArray[k].getPosition();
+      var position = cwCar.getPosition();
       if (position.x > lead) {
+        lead = position.x;
         leaderPosition = position;
-        leaderPosition.leader = k;
+        leaderPosition.leader = carInfo.index;
       }
-    }
+    });
   }
 
   function fastForward() {
@@ -2564,11 +2516,6 @@
     cw_setEliteSize(elem.options[elem.selectedIndex].value)
   })
 
-  document.querySelector("#mutationalgorithm").addEventListener("change", function (e) {
-    var elem = e.target
-    cw_setMutationAlgorithm(elem.options[elem.selectedIndex].value)
-  })
-
   function cw_setMutation(mutation) {
     generationConfig.constants.gen_mutation = parseFloat(mutation);
   }
@@ -2594,11 +2541,7 @@
     generationConfig.constants.championLength = parseInt(clones, 10);
   }
 
-  function cw_setMutationAlgorithm(algo) {
-    generationConfig.constants.mutationAlgorithm = algo;
-  }
-
-  // Expose to global scope for inline onclick handlers in index.html
+// Expose to global scope for inline onclick handlers in index.html
   window.cw_setCameraTarget = cw_setCameraTarget;
 
   cw_init();
