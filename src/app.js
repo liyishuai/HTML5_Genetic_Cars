@@ -38,23 +38,6 @@
       }
       return values;
     },
-    mutateShuffle(
-      prop, generator, originalValues, mutation_range, chanceToMutate
-    ) {
-      return random.mapToShuffle(prop, random.mutateNormals(
-        prop, generator, originalValues, mutation_range, chanceToMutate
-      ));
-    },
-    mutateIntegers(prop, generator, originalValues, mutation_range, chanceToMutate) {
-      return random.mapToInteger(prop, random.mutateNormals(
-        prop, generator, originalValues, mutation_range, chanceToMutate
-      ));
-    },
-    mutateFloats(prop, generator, originalValues, mutation_range, chanceToMutate) {
-      return random.mapToFloat(prop, random.mutateNormals(
-        prop, generator, originalValues, mutation_range, chanceToMutate
-      ));
-    },
     mapToShuffle(prop, normals) {
       var offset = prop.offset || 0;
       var limit = prop.limit || prop.length;
@@ -88,17 +71,6 @@
         return min + normal * range
       })
     },
-    mutateNormals(prop, generator, originalValues, mutation_range, chanceToMutate) {
-      var factor = (prop.factor || 1) * mutation_range
-      return originalValues.map(function (originalValue) {
-        if (generator() > chanceToMutate) {
-          return originalValue;
-        }
-        return mutateNormal(
-          prop, generator, originalValue, factor
-        );
-      });
-    },
     mutateReplace(prop, generator, originalValues, mutation_range, chanceToMutate) {
       var factor = (prop.factor || 1) * mutation_range;
       return originalValues.map(function (originalValue) {
@@ -126,21 +98,7 @@
 
 
 
-  function mutateNormal(prop, generator, originalValue, mutation_range) {
-    if (mutation_range > 1) {
-      throw new Error("Cannot mutate beyond bounds");
-    }
-    var newMin = originalValue - 0.5;
-    if (newMin < 0) newMin = 0;
-    if (newMin + mutation_range > 1)
-      newMin = 1 - mutation_range;
-    var rangeValue = createNormal({
-      inclusive: true,
-    }, generator);
-    return newMin + rangeValue * mutation_range;
-  }
-
-  function createNormal(prop, generator) {
+function createNormal(prop, generator) {
     if (!prop.inclusive) {
       return generator();
     } else {
@@ -186,8 +144,8 @@
         })
       });
     },
-    createMutatedClone(schema, generator, parent, factor, chanceToMutate, mutationAlgorithm) {
-      var mutateFn = mutationAlgorithm === 'normals' ? random.mutateNormals : random.mutateReplace;
+    createMutatedClone(schema, generator, parent, factor, chanceToMutate) {
+      var mutateFn = random.mutateReplace;
       return Object.keys(schema).reduce(function (clone, key) {
         var schemaProp = schema[key];
         var originalValues = parent[key];
@@ -477,134 +435,8 @@
 
 
   /* -------------------------------------------------------------------------
-   * generation-config/inbreeding-coefficient.js
-   * ------------------------------------------------------------------------- */
-  // http://sunmingtao.blogspot.com/2016/11/inbreeding-coefficient.html
-
-
-  function getInbreedingCoefficient(child) {
-    var nameIndex = new Map();
-    var flagged = new Set();
-    var convergencePoints = new Set();
-    createAncestryMap(child, []);
-
-    var storedCoefficients = new Map();
-
-    return Array.from(convergencePoints.values()).reduce(function (sum, point) {
-      var iCo = getCoefficient(point);
-      return sum + iCo;
-    }, 0);
-
-    function createAncestryMap(initNode) {
-      var itemsInQueue = [{ node: initNode, path: [] }];
-      do {
-        var item = itemsInQueue.shift();
-        var node = item.node;
-        var path = item.path;
-        if (processItem(node, path)) {
-          var nextPath = [node.id].concat(path);
-          itemsInQueue = itemsInQueue.concat(node.ancestry.map(function (parent) {
-            return {
-              node: parent,
-              path: nextPath
-            };
-          }));
-        }
-      } while (itemsInQueue.length);
-
-
-      function processItem(node, path) {
-        var newAncestor = !nameIndex.has(node.id);
-        if (newAncestor) {
-          nameIndex.set(node.id, {
-            parents: (node.ancestry || []).map(function (parent) {
-              return parent.id;
-            }),
-            id: node.id,
-            children: [],
-            convergences: [],
-          });
-        } else {
-
-          flagged.add(node.id)
-          nameIndex.get(node.id).children.forEach(function (childIdentifier) {
-            var offsets = findConvergence(childIdentifier.path, path);
-            if (!offsets) {
-              return;
-            }
-            var childID = path[offsets[1]];
-            convergencePoints.add(childID);
-            nameIndex.get(childID).convergences.push({
-              parent: node.id,
-              offsets: offsets,
-            });
-          });
-        }
-
-        if (path.length) {
-          nameIndex.get(node.id).children.push({
-            child: path[0],
-            path: path
-          });
-        }
-
-        if (!newAncestor) {
-          return;
-        }
-        if (!node.ancestry) {
-          return;
-        }
-        return true;
-      }
-    }
-
-    function getCoefficient(id) {
-      if (storedCoefficients.has(id)) {
-        return storedCoefficients.get(id);
-      }
-      var node = nameIndex.get(id);
-      var val = node.convergences.reduce(function (sum, point) {
-        return sum + Math.pow(1 / 2, point.offsets.reduce(function (sum, value) {
-          return sum + value;
-        }, 1)) * (1 + getCoefficient(point.parent));
-      }, 0);
-      storedCoefficients.set(id, val);
-
-      return val;
-
-    }
-    function findConvergence(listA, listB) {
-      var ci, cj, li, lj;
-      outerloop:
-      for (ci = 0, li = listA.length; ci < li; ci++) {
-        for (cj = 0, lj = listB.length; cj < lj; cj++) {
-          if (listA[ci] === listB[cj]) {
-            break outerloop;
-          }
-        }
-      }
-      if (ci === li) {
-        return false;
-      }
-      return [ci, cj];
-    }
-  }
-
-
-  /* -------------------------------------------------------------------------
    * generation-config/selectFromAllParents.js
    * ------------------------------------------------------------------------- */
-
-
-
-
-  function simpleSelect(parents) {
-    var totalParents = parents.length
-    var r = Math.random();
-    if (r == 0)
-      return 0;
-    return Math.floor(-Math.log(r) * totalParents) % totalParents;
-  }
 
   function flatRankSelect(parents) {
     var totalParents = parents.length;
@@ -619,48 +451,6 @@
       parentIndex = Math.floor(Math.random() * totalParents);
     }
     return parentIndex;
-  }
-
-  function selectFromAllParents(parents, parentList, previousParentIndex) {
-    var previousParent = parents[previousParentIndex];
-    var validParents = parents.filter(function (parent, i) {
-      if (previousParentIndex === i) {
-        return false;
-      }
-      if (!previousParent) {
-        return true;
-      }
-      var child = {
-        id: Math.random().toString(32),
-        ancestry: [previousParent, parent].map(function (p) {
-          return {
-            id: p.def.id,
-            ancestry: p.def.ancestry
-          }
-        })
-      }
-      var iCo = getInbreedingCoefficient(child);
-      if (iCo > 0.25) {
-        return false;
-      }
-      return true;
-    })
-    if (validParents.length === 0) {
-      return Math.floor(Math.random() * parents.length)
-    }
-    var totalScore = validParents.reduce(function (sum, parent) {
-      return sum + parent.score.v;
-    }, 0);
-    var r = totalScore * Math.random();
-    for (var i = 0; i < validParents.length; i++) {
-      var score = validParents[i].score.v;
-      if (r > score) {
-        r = r - score;
-      } else {
-        break;
-      }
-    }
-    return i;
   }
 
 
@@ -733,8 +523,7 @@
     var schema = carConstruct.generateSchema(carConstants);
     var constants = {
       generationSize: 20, schema: schema, championLength: 1,
-      mutation_range: 1, gen_mutation: 0.05,
-      mutationAlgorithm: 'replace'
+      mutation_range: 1, gen_mutation: 0.05
     };
     var fn = function () {
       var currentChoices = new Map();
@@ -827,15 +616,13 @@
       var schema = config.schema,
         mutation_range = config.mutation_range,
         gen_mutation = config.gen_mutation,
-        generateRandom = config.generateRandom,
-        mutationAlgorithm = config.mutationAlgorithm;
+        generateRandom = config.generateRandom;
       return create.createMutatedClone(
         schema,
         generateRandom,
         parent,
         Math.max(mutation_range),
-        gen_mutation,
-        mutationAlgorithm
+        gen_mutation
       )
     }
 
@@ -905,17 +692,14 @@
     function createStructure(config, mutation_range, parent) {
       var schema = config.schema,
         gen_mutation = 1,
-        generateRandom = config.generateRandom,
-        mutationAlgorithm = config.mutationAlgorithm;
+        generateRandom = config.generateRandom;
       return create.createMutatedClone(
         schema,
         generateRandom,
         parent,
         mutation_range,
-        gen_mutation,
-        mutationAlgorithm
+        gen_mutation
       )
-
     }
 
     return { generationZero: generationZero, nextGeneration: nextGeneration };
@@ -1238,167 +1022,6 @@
   // Called when the Visualization API is loaded.
 
 
-  function scatterPlot(elem, scores) {
-    var keys = Object.keys(scores[0].def);
-    keys = keys.reduce(function (curArray, key) {
-      var l = scores[0].def[key].length;
-      var subArray = [];
-      for (var i = 0; i < l; i++) {
-        subArray.push(key + "." + i);
-      }
-      return curArray.concat(subArray);
-    }, []);
-    function retrieveValue(obj, path) {
-      return path.split(".").reduce(function (curValue, key) {
-        return curValue[key];
-      }, obj);
-    }
-
-    var dataObj = Object.keys(scores).reduce(function (kv, score) {
-      keys.forEach(function (key) {
-        kv[key].data.push([
-          retrieveValue(score.def, key), score.score.v
-        ])
-      })
-      return kv;
-    }, keys.reduce(function (kv, key) {
-      kv[key] = {
-        name: key,
-        data: [],
-      }
-      return kv;
-    }, {}))
-    Highcharts.chart(elem.id, {
-      chart: {
-        type: 'scatter',
-        zoomType: 'xy'
-      },
-      title: {
-        text: 'Property Value to Score'
-      },
-      xAxis: {
-        title: {
-          enabled: true,
-          text: 'Normalized'
-        },
-        startOnTick: true,
-        endOnTick: true,
-        showLastLabel: true
-      },
-      yAxis: {
-        title: {
-          text: 'Score'
-        }
-      },
-      legend: {
-        layout: 'vertical',
-        align: 'left',
-        verticalAlign: 'top',
-        x: 100,
-        y: 70,
-        floating: true,
-        backgroundColor: (Highcharts.theme && Highcharts.theme.legendBackgroundColor) || '#FFFFFF',
-        borderWidth: 1
-      },
-      plotOptions: {
-        scatter: {
-          marker: {
-            radius: 5,
-            states: {
-              hover: {
-                enabled: true,
-                lineColor: 'rgb(100,100,100)'
-              }
-            }
-          },
-          states: {
-            hover: {
-              marker: {
-                enabled: false
-              }
-            }
-          },
-          tooltip: {
-            headerFormat: '<b>{series.name}</b><br>',
-            pointFormat: '{point.x}, {point.y}'
-          }
-        }
-      },
-      series: keys.map(function (key) {
-        return dataObj[key];
-      })
-    });
-  }
-
-  function visChart(elem, scores, propertyMap, graph) {
-
-    // Create and populate a data table.
-    var data = new vis.DataSet();
-    scores.forEach(function (scoreInfo) {
-      data.add({
-        x: getProperty(scoreInfo, propertyMap.x),
-        y: getProperty(scoreInfo, propertyMap.x),
-        z: getProperty(scoreInfo, propertyMap.z),
-        style: getProperty(scoreInfo, propertyMap.z),
-        // extra: def.ancestry
-      });
-    });
-
-    function getProperty(info, key) {
-      if (key === "score") {
-        return info.score.v
-      } else {
-        return info.def[key];
-      }
-    }
-
-    // specify options
-    var options = {
-      width: '600px',
-      height: '600px',
-      style: 'dot-size',
-      showPerspective: true,
-      showLegend: true,
-      showGrid: true,
-      showShadow: false,
-
-      // Option tooltip can be true, false, or a function returning a string with HTML contents
-      tooltip: function (point) {
-        // parameter point contains properties x, y, z, and data
-        // data is the original object passed to the point constructor
-        return 'score: <b>' + point.z + '</b><br>'; // + point.data.extra;
-      },
-
-      // Tooltip default styling can be overridden
-      tooltipStyle: {
-        content: {
-          background: 'rgba(255, 255, 255, 0.7)',
-          padding: '10px',
-          borderRadius: '10px'
-        },
-        line: {
-          borderLeft: '1px dotted rgba(0, 0, 0, 0.5)'
-        },
-        dot: {
-          border: '5px solid rgba(0, 0, 0, 0.5)'
-        }
-      },
-
-      keepAspectRatio: true,
-      verticalRatio: 0.5
-    };
-
-    var camera = graph ? graph.getCameraPosition() : null;
-
-    // create our graph
-    var container = elem;
-    graph = new vis.Graph3d(container, data, options);
-
-    if (camera) graph.setCameraPosition(camera); // restore camera position
-    return graph;
-  }
-
-
   /* -------------------------------------------------------------------------
    * draw/plot-graphs.js
    * ------------------------------------------------------------------------- */
@@ -1422,13 +1045,6 @@
       cw_listTopScores(topScoresElem, nextState);
       return nextState;
     },
-    clearGraphics: function (graphElem) {
-      var graphcanvas = graphElem;
-      var graphctx = graphcanvas.getContext("2d");
-      var graphwidth = 400;
-      var graphheight = 250;
-      cw_clearGraphics(graphcanvas, graphctx, graphwidth, graphheight);
-    }
   };
 
 
@@ -1540,12 +1156,6 @@
       ts.innerHTML += [n, score, distance, yrange, gen].join(" ") + "<br />";
     }
   }
-
-  function drawAllResults(scatterPlotElem, config, allResults, previousGraph) {
-    if (!scatterPlotElem) return;
-    return scatterPlot(scatterPlotElem, allResults, config.propertyMap, previousGraph)
-  }
-
 
   /* -------------------------------------------------------------------------
    * draw/draw-car.js
@@ -2013,7 +1623,7 @@
     ctx.restore();
   }
 
-  function cw_minimapCamera(/* x, y*/) {
+  function cw_minimapCamera() {
     var camera_x = camera.pos.x
     var camera_y = camera.pos.y
     minimapcamera.left = Math.round((2 + camera_x) * minimapscale) + "px";
@@ -2050,7 +1660,7 @@
     var diff_x = camera.pos.x - cameraTargetPosition.x;
     camera.pos.y -= camera.speed * diff_y;
     camera.pos.x -= camera.speed * diff_x;
-    cw_minimapCamera(camera.pos.x, camera.pos.y);
+    cw_minimapCamera();
   }
 
   function cw_drawGhostReplay() {
@@ -2069,7 +1679,7 @@
     }
     camera.pos.x = carPosition.x;
     camera.pos.y = carPosition.y;
-    cw_minimapCamera(camera.pos.x, camera.pos.y);
+    cw_minimapCamera();
     showDistance(
       Math.round(carPosition.x * 100) / 100,
       Math.round(carPosition.y * 100) / 100
@@ -2216,17 +1826,17 @@
 
   function cw_findLeader() {
     var lead = 0;
-    var cw_carArray = Array.from(carMap.values());
-    for (var k = 0; k < cw_carArray.length; k++) {
-      if (!cw_carArray[k].alive) {
-        continue;
+    carMap.forEach(function(cwCar, carInfo) {
+      if (!cwCar.alive) {
+        return;
       }
-      var position = cw_carArray[k].getPosition();
+      var position = cwCar.getPosition();
       if (position.x > lead) {
+        lead = position.x;
         leaderPosition = position;
-        leaderPosition.leader = k;
+        leaderPosition.leader = carInfo.index;
       }
-    }
+    });
   }
 
   function fastForward() {
@@ -2524,7 +2134,7 @@
       var pos = cw_carArray[i].getPosition();
       var dist = Math.abs(((pos.x + 6) * minimapscale) - coords.x);
       if (dist < closest.dist) {
-        closest.value = cw_carArray.car;
+        closest.value = cw_carArray[i].car;
         closest.dist = dist;
         closest.x = pos.x;
       }
@@ -2564,11 +2174,6 @@
     cw_setEliteSize(elem.options[elem.selectedIndex].value)
   })
 
-  document.querySelector("#mutationalgorithm").addEventListener("change", function (e) {
-    var elem = e.target
-    cw_setMutationAlgorithm(elem.options[elem.selectedIndex].value)
-  })
-
   function cw_setMutation(mutation) {
     generationConfig.constants.gen_mutation = parseFloat(mutation);
   }
@@ -2594,11 +2199,7 @@
     generationConfig.constants.championLength = parseInt(clones, 10);
   }
 
-  function cw_setMutationAlgorithm(algo) {
-    generationConfig.constants.mutationAlgorithm = algo;
-  }
-
-  // Expose to global scope for inline onclick handlers in index.html
+// Expose to global scope for inline onclick handlers in index.html
   window.cw_setCameraTarget = cw_setCameraTarget;
 
   cw_init();
